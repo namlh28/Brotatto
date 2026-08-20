@@ -3,69 +3,116 @@ using TMPro;
 
 public class Player : MonoBehaviour
 {
-    [SerializeField] TextMeshProUGUI healthText; // Đã sửa tên biến
-    [SerializeField] float moveSpeed = 5f;
-    
-    Animator anim;
-    Rigidbody2D rb;
+    [Header("UI & References")]
+    [SerializeField] private TextMeshProUGUI healthText;
 
-    
-    int maxHealth;
-    int currentHealth;
+    [Header("Movement Settings")]
+    [SerializeField] private float walkSpeed = 5f;
+    [SerializeField] private float runSpeed = 8f;
+    private float currentSpeed;
 
-    bool dead = false; // Đã xóa dòng float dead thừa phía dưới
+    [Header("Health Settings")]
+    [SerializeField] private int maxHealth = 100;
+    private int currentHealth;
 
-    float moveHorizontal, moveVertical;
-    Vector2 movement;
+    // Internal Components
+    private Animator anim;
+    private Rigidbody2D rb;
+    private SpriteRenderer spriteRenderer;
 
-    int facingDirection = 1;
+    private bool isDead = false;
+    private Vector2 movement;
 
     private void Start()
     {
         anim = GetComponent<Animator>();
-        rb = GetComponent<Rigidbody2D>(); // Đã sửa từ Animator sang Rigidbody2D
+        rb = GetComponent<Rigidbody2D>();
+        spriteRenderer = GetComponent<SpriteRenderer>();
+
+        currentHealth = maxHealth;
+        UpdateHealthUI();
     }
 
-    void Update()
+    private void Update()
     {
-        if (dead)
+        if (isDead)
         {
             movement = Vector2.zero;
-            if (anim != null) anim.SetFloat("velocity", 0);
+            UpdateAnimation(0);
             return;
         }
 
-        // Lấy Input di chuyển
-        moveHorizontal = Input.GetAxisRaw("Horizontal");
-        moveVertical = Input.GetAxisRaw("Vertical");
+        // 1. Lấy Input di chuyển
+        float moveX = Input.GetAxisRaw("Horizontal");
+        float moveY = Input.GetAxisRaw("Vertical");
+        movement = new Vector2(moveX, moveY).normalized;
 
-        movement = new Vector2(moveHorizontal, moveVertical).normalized;
+        // 2. Xử lý tốc độ Chạy (Shift) / Đi bộ
+        bool isRunning = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+        currentSpeed = isRunning ? runSpeed : walkSpeed;
 
-        // Cập nhật Animation (Đã sửa từ move -> movement)
-        if (anim != null)
-        {
-            anim.SetFloat("velocity", movement.magnitude);
-        }
+        // 3. Cập nhật Animation
+        UpdateAnimation(movement.magnitude);
 
-        // Lật mặt nhân vật (Flip)
-        if (movement.x != 0)
-        {
-            facingDirection = movement.x > 0 ? 1 : -1;
-        }
-
-        transform.localScale = new Vector3(facingDirection, 1, 1);
+        // 4. Lật hướng nhân vật trái/phải
+        HandleFlip();
     }
 
     private void FixedUpdate()
     {
-        // Áp dụng di chuyển vào Rigidbody2D (Đã sửa cú pháp nhân vector)
-        if (!dead)
+        if (!isDead)
         {
-            rb.linearVelocity = movement * moveSpeed;
+            rb.linearVelocity = movement * currentSpeed;
         }
         else
         {
             rb.linearVelocity = Vector2.zero;
+        }
+    }
+
+    private void HandleFlip()
+    {
+        if (movement.x != 0)
+        {
+            // Nếu di chuyển sang trái (movement.x < 0) thì flipX = true, ngược lại false
+            spriteRenderer.flipX = movement.x < 0;
+        }
+    }
+
+    private void UpdateAnimation(float speed)
+    {
+        if (anim != null)
+        {
+            // An toàn kiểm tra trước khi gán để tránh báo lỗi Console
+            anim.SetFloat("speed", speed);
+        }
+    }
+
+    public void TakeDamage(int damage)
+    {
+        if (isDead) return;
+
+        currentHealth -= damage;
+        UpdateHealthUI();
+
+        if (currentHealth <= 0)
+        {
+            Die();
+        }
+    }
+
+    private void Die()
+    {
+        isDead = true;
+        rb.linearVelocity = Vector2.zero;
+        if (anim != null) anim.SetTrigger("die");
+    }
+
+    private void UpdateHealthUI()
+    {
+        if (healthText != null)
+        {
+            healthText.text = $"HP: {currentHealth}/{maxHealth}";
         }
     }
 }
